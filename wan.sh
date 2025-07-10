@@ -221,6 +221,28 @@ verify_conda_installation() {
 install_miniconda() {
     print_step "Installing Miniconda..."
     
+    # Check if miniconda directory already exists
+    if [[ -d "$HOME/miniconda3" ]]; then
+        print_info "Miniconda directory already exists at $HOME/miniconda3"
+        
+        # Check if it's a valid conda installation
+        if [[ -f "$HOME/miniconda3/bin/conda" ]] || [[ -f "$HOME/miniconda3/condabin/conda" ]]; then
+            print_success "Valid Miniconda installation found, skipping installation"
+            
+            # Initialize conda automatically
+            initialize_conda
+            
+            # Source conda to make it available in current session
+            if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
+                source "$HOME/miniconda3/etc/profile.d/conda.sh"
+            fi
+            return 0
+        else
+            print_warning "Miniconda directory exists but appears corrupted, removing and reinstalling..."
+            rm -rf "$HOME/miniconda3"
+        fi
+    fi
+    
     # Get system information
     local os=$(get_system_info)
     local arch=$(get_architecture)
@@ -262,20 +284,14 @@ install_miniconda() {
     # Make the installer executable
     chmod +x "$installer_path"
     
-    # Run the installer
-    print_info "Installing Miniconda..."
-    print_info "Please follow the prompts in the installer"
-    print_warning "When prompted, it's recommended to:"
-    print_warning "1. Accept the license agreement"
-    print_warning "2. Use the default installation location (or specify your preferred location)"
-    print_warning "3. Allow the installer to initialize conda (answer 'yes' when asked)"
+    # Run the installer in batch mode (completely non-interactive)
+    print_info "Installing Miniconda in batch mode (non-interactive)..."
     
-    # Run installer in batch mode if possible
     if bash "$installer_path" -b -p "$HOME/miniconda3"; then
         print_success "Miniconda installed successfully in batch mode"
     else
-        print_info "Batch installation failed, running interactive installer..."
-        bash "$installer_path"
+        print_error "Batch installation failed"
+        exit 1
     fi
     
     # Clean up the installer
@@ -299,15 +315,30 @@ install_miniconda() {
 setup_conda_environment() {
     print_step "Setting up conda environment..."
     
+    # Make sure conda is available
+    if ! command -v conda &> /dev/null; then
+        if [[ -f "$HOME/miniconda3/etc/profile.d/conda.sh" ]]; then
+            source "$HOME/miniconda3/etc/profile.d/conda.sh"
+        fi
+    fi
+    
     # Check if environment already exists
     if conda env list | grep -q "$CONDA_ENV_NAME"; then
         print_info "Environment $CONDA_ENV_NAME already exists. Activating..."
         conda activate "$CONDA_ENV_NAME"
+        print_success "Conda environment activated"
     else
         print_info "Creating new conda environment: $CONDA_ENV_NAME"
         conda create -n "$CONDA_ENV_NAME" python="$PYTHON_VERSION" -y
         conda activate "$CONDA_ENV_NAME"
         print_success "Conda environment created and activated"
+    fi
+    
+    # Verify the environment is active
+    if [[ "$CONDA_DEFAULT_ENV" == "$CONDA_ENV_NAME" ]]; then
+        print_success "Currently active environment: $CONDA_DEFAULT_ENV"
+    else
+        print_warning "Environment activation may not have worked correctly"
     fi
 }
 
@@ -318,7 +349,19 @@ setup_wan2gp_repo() {
     if [[ -d "$WAN2GP_DIR" ]]; then
         print_info "Wan2GP directory exists. Updating..."
         cd "$WAN2GP_DIR"
-        git pull
+        
+        # Check if it's a valid git repository
+        if git rev-parse --git-dir > /dev/null 2>&1; then
+            print_info "Updating existing repository..."
+            git fetch origin
+            git reset --hard origin/main
+            print_success "Repository updated successfully"
+        else
+            print_warning "Directory exists but is not a valid git repository, removing and cloning..."
+            cd ..
+            rm -rf "$WAN2GP_DIR"
+            git clone "$WAN2GP_REPO"
+        fi
         cd ..
     else
         print_info "Cloning Wan2GP repository..."
@@ -330,17 +373,33 @@ setup_wan2gp_repo() {
 
 # Function to install dependencies
 install_dependencies() {
+    local force_deps=${1:-false}
     print_step "Installing dependencies..."
     
     cd "$WAN2GP_DIR"
     
+    # Check if requirements.txt exists
+    if [[ ! -f "requirements.txt" ]]; then
+        print_error "requirements.txt not found in Wan2GP directory"
+        cd ..
+        exit 1
+    fi
+    
     # Install PyTorch
     print_info "Installing PyTorch $TORCH_VERSION..."
-    pip install "torch==$TORCH_VERSION" torchvision torchaudio --index-url "$TORCH_INDEX_URL"
+    if [[ "$force_deps" == true ]]; then
+        pip install "torch==$TORCH_VERSION" torchvision torchaudio --index-url "$TORCH_INDEX_URL" --force-reinstall
+    else
+        pip install "torch==$TORCH_VERSION" torchvision torchaudio --index-url "$TORCH_INDEX_URL"
+    fi
     
     # Install other requirements
     print_info "Installing requirements from requirements.txt..."
-    pip install -r requirements.txt
+    if [[ "$force_deps" == true ]]; then
+        pip install -r requirements.txt --force-reinstall
+    else
+        pip install -r requirements.txt --upgrade
+    fi
     
     cd ..
     print_success "Dependencies installed successfully"
@@ -459,6 +518,7 @@ show_help() {
     echo "  --i2v                   Launch in image-to-video mode"
     echo "  --skip-conda            Skip conda installation (assume already installed)"
     echo "  --update-only           Only update existing installation"
+    echo "  --force-deps            Force reinstall all dependencies"
     echo ""
     echo "Environment Variables:"
     echo "  PORT                    Override default port"
@@ -468,6 +528,7 @@ show_help() {
     echo "  $0 --port 8080         # Launch on port 8080"
     echo "  $0 --i2v               # Launch in image-to-video mode"
     echo "  $0 --update-only       # Only update existing installation"
+    echo "  $0 --force-deps        # Force reinstall all dependencies"
 }
 
 # Main function
@@ -475,6 +536,7 @@ main() {
     local skip_conda=false
     local update_only=false
     local i2v_mode=false
+    local force_deps=false
     local port="$DEFAULT_PORT"
     
     # Parse command line arguments
@@ -498,6 +560,10 @@ main() {
                 ;;
             --update-only)
                 update_only=true
+                shift
+                ;;
+            --force-deps)
+                force_deps=true
                 shift
                 ;;
             *)
@@ -541,10 +607,16 @@ main() {
     setup_wan2gp_repo
     
     # Install dependencies
-    install_dependencies
+    install_dependencies "$force_deps"
     
     if [[ "$update_only" == true ]]; then
         print_success "Update completed successfully!"
+        if [[ "$force_deps" == true ]]; then
+            print_info "Also reinstalling dependencies due to --force-deps flag..."
+            install_dependencies "$force_deps"
+        else
+            print_info "Use --force-deps flag if you want to force reinstall dependencies"
+        fi
         exit 0
     fi
     
