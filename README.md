@@ -97,7 +97,7 @@ Skip conda installation (if already installed):
 4. **Automatically initializes conda** for your shell (bash, zsh, fish) and verifies installation
 5. **Creates and activates** a conda environment named "wan2gp"
 6. **Clones/updates** the Wan2GP repository
-7. **Installs PyTorch 2.7.0** and other dependencies
+7. **Installs PyTorch 2.6.0** and other dependencies
 8. **Launches** the Wan2GP application on the specified port
 
 **Access the application:**

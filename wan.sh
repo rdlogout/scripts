@@ -38,7 +38,7 @@ print_step() {
 WAN2GP_REPO="https://github.com/deepbeepmeep/Wan2GP.git"
 CONDA_ENV_NAME="wan2gp"
 PYTHON_VERSION="3.10.9"
-TORCH_VERSION="2.7.0"
+TORCH_VERSION="2.6.0"
 TORCH_INDEX_URL="https://download.pytorch.org/whl/test/cu124"
 DEFAULT_PORT="7860"
 WAN2GP_DIR="Wan2GP"
