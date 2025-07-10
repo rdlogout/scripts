@@ -52,15 +52,40 @@ check_conda() {
     fi
 }
 
+# Function to get system information
+get_system_info() {
+    local os=$(uname -s)
+    local arch=$(uname -m)
+    
+    # Determine OS
+    case $os in
+        Darwin)
+            echo "macos"
+            ;;
+        Linux)
+            echo "linux"
+            ;;
+        *)
+            echo "unsupported"
+            ;;
+    esac
+}
+
 # Function to get system architecture
 get_architecture() {
-    arch=$(uname -m)
+    local arch=$(uname -m)
+    local os=$(get_system_info)
+    
     case $arch in
         x86_64)
             echo "x86_64"
             ;;
-        arm64)
-            echo "arm64"
+        arm64|aarch64)
+            if [[ "$os" == "macos" ]]; then
+                echo "arm64"
+            else
+                echo "aarch64"
+            fi
             ;;
         *)
             echo "x86_64"  # Default fallback
@@ -93,23 +118,53 @@ initialize_conda() {
     fi
     
     if [[ -f "$conda_path" ]]; then
-        # Initialize conda for zsh (default shell on macOS)
-        if "$conda_path" init zsh &> /dev/null; then
-            print_success "Conda initialized successfully for zsh"
+        # Get current shell
+        local current_shell=$(basename "$SHELL")
+        
+        # Initialize conda for current shell
+        if "$conda_path" init "$current_shell" &> /dev/null; then
+            print_success "Conda initialized successfully for $current_shell"
         else
-            print_warning "Failed to initialize conda for zsh"
+            print_warning "Failed to initialize conda for $current_shell"
         fi
         
-        # Also initialize for bash as fallback
-        if "$conda_path" init bash &> /dev/null; then
-            print_success "Conda initialized successfully for bash"
-        else
-            print_warning "Failed to initialize conda for bash"
+        # Also initialize for bash as fallback (most common)
+        if [[ "$current_shell" != "bash" ]]; then
+            if "$conda_path" init bash &> /dev/null; then
+                print_success "Conda initialized successfully for bash"
+            else
+                print_warning "Failed to initialize conda for bash"
+            fi
+        fi
+        
+        # Initialize for zsh if on macOS or if zsh is available
+        if [[ "$current_shell" != "zsh" ]] && command -v zsh &> /dev/null; then
+            if "$conda_path" init zsh &> /dev/null; then
+                print_success "Conda initialized successfully for zsh"
+            else
+                print_warning "Failed to initialize conda for zsh"
+            fi
         fi
         
         # Source the shell configuration to make conda available immediately
-        if [[ -f "$HOME/.zshrc" ]]; then
-            print_info "Conda has been initialized! Please restart your terminal or run 'source ~/.zshrc' to activate conda"
+        local config_file=""
+        case "$current_shell" in
+            bash)
+                config_file="$HOME/.bashrc"
+                ;;
+            zsh)
+                config_file="$HOME/.zshrc"
+                ;;
+            fish)
+                config_file="$HOME/.config/fish/config.fish"
+                ;;
+            *)
+                config_file="$HOME/.bashrc"
+                ;;
+        esac
+        
+        if [[ -f "$config_file" ]]; then
+            print_info "Conda has been initialized! Please restart your terminal or run 'source $config_file' to activate conda"
         fi
         
         # Try to make conda available in current session
@@ -166,25 +221,41 @@ verify_conda_installation() {
 install_miniconda() {
     print_step "Installing Miniconda..."
     
-    # Check if we're on macOS
-    if [[ "$OSTYPE" != "darwin"* ]]; then
-        print_error "This script is designed for macOS only"
+    # Get system information
+    local os=$(get_system_info)
+    local arch=$(get_architecture)
+    
+    # Check if OS is supported
+    if [[ "$os" == "unsupported" ]]; then
+        print_error "Unsupported operating system: $(uname -s)"
+        print_info "This script supports macOS and Linux-based systems"
         exit 1
     fi
     
-    # Get system architecture
-    local arch=$(get_architecture)
-    local installer_name="Miniconda3-latest-MacOSX-${arch}.sh"
-    local download_url="https://repo.anaconda.com/miniconda/${installer_name}"
+    # Set installer name based on OS and architecture
+    local installer_name=""
+    local download_url=""
+    
+    case "$os" in
+        macos)
+            installer_name="Miniconda3-latest-MacOSX-${arch}.sh"
+            ;;
+        linux)
+            installer_name="Miniconda3-latest-Linux-${arch}.sh"
+            ;;
+    esac
+    
+    download_url="https://repo.anaconda.com/miniconda/${installer_name}"
     local installer_path="/tmp/${installer_name}"
     
-    print_info "Downloading Miniconda installer for macOS (${arch})..."
+    print_info "Downloading Miniconda installer for $os (${arch})..."
     
     # Download the installer
     if curl -fsSL "$download_url" -o "$installer_path"; then
         print_success "Miniconda installer downloaded successfully"
     else
         print_error "Failed to download Miniconda installer"
+        print_info "URL: $download_url"
         exit 1
     fi
     
@@ -303,20 +374,73 @@ launch_wan2gp() {
 check_system_requirements() {
     print_step "Checking system requirements..."
     
-    # Check if we're on macOS
-    if [[ "$OSTYPE" != "darwin"* ]]; then
-        print_warning "This script is optimized for macOS. Some features may not work on other systems."
-    fi
+    # Get system information
+    local os=$(get_system_info)
+    
+    # Check if OS is supported
+    case "$os" in
+        macos)
+            print_info "Detected macOS system"
+            ;;
+        linux)
+            print_info "Detected Linux system"
+            # Check if we're on Ubuntu/Debian-based system
+            if command -v apt &> /dev/null; then
+                print_info "Detected Debian/Ubuntu-based system"
+            elif command -v yum &> /dev/null; then
+                print_info "Detected Red Hat-based system"
+            elif command -v pacman &> /dev/null; then
+                print_info "Detected Arch-based system"
+            fi
+            ;;
+        unsupported)
+            print_error "Unsupported operating system: $(uname -s)"
+            print_info "This script supports macOS and Linux-based systems"
+            exit 1
+            ;;
+    esac
     
     # Check if git is installed
     if ! command -v git &> /dev/null; then
-        print_error "Git is required but not installed. Please install git first."
+        print_error "Git is required but not installed."
+        case "$os" in
+            macos)
+                print_info "Install git using: brew install git or install Xcode command line tools"
+                ;;
+            linux)
+                if command -v apt &> /dev/null; then
+                    print_info "Install git using: sudo apt update && sudo apt install git"
+                elif command -v yum &> /dev/null; then
+                    print_info "Install git using: sudo yum install git"
+                elif command -v pacman &> /dev/null; then
+                    print_info "Install git using: sudo pacman -S git"
+                else
+                    print_info "Install git using your system's package manager"
+                fi
+                ;;
+        esac
         exit 1
     fi
     
     # Check if curl is installed
     if ! command -v curl &> /dev/null; then
-        print_error "curl is required but not installed. Please install curl first."
+        print_error "curl is required but not installed."
+        case "$os" in
+            macos)
+                print_info "curl should be pre-installed on macOS. Try: brew install curl"
+                ;;
+            linux)
+                if command -v apt &> /dev/null; then
+                    print_info "Install curl using: sudo apt update && sudo apt install curl"
+                elif command -v yum &> /dev/null; then
+                    print_info "Install curl using: sudo yum install curl"
+                elif command -v pacman &> /dev/null; then
+                    print_info "Install curl using: sudo pacman -S curl"
+                else
+                    print_info "Install curl using your system's package manager"
+                fi
+                ;;
+        esac
         exit 1
     fi
     

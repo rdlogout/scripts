@@ -35,6 +35,7 @@ A complete setup and launch script for [Wan2GP](https://github.com/deepbeepmeep/
 
 **Features:**
 
+- **Cross-platform support**: Works on macOS and Linux (Ubuntu/Debian, Red Hat, Arch)
 - Automatically installs Miniconda (if not present) - completely self-contained
 - Sets up a dedicated conda environment
 - Installs PyTorch and all required dependencies
@@ -42,6 +43,7 @@ A complete setup and launch script for [Wan2GP](https://github.com/deepbeepmeep/
 - Supports both text-to-video and image-to-video modes
 - Handles repository cloning and updates
 - No external dependencies or script files needed
+- Intelligent shell detection and initialization
 
 **Usage:**
 
@@ -89,23 +91,32 @@ Skip conda installation (if already installed):
 
 **What the script does:**
 
-1. Checks system requirements (git, curl)
-2. Installs Miniconda (if needed) - downloads directly from official source
-3. Automatically initializes conda and verifies installation
-4. Creates and activates a conda environment named "wan2gp"
-5. Clones/updates the Wan2GP repository
-6. Installs PyTorch 2.7.0 and other dependencies
-7. Launches the Wan2GP application on the specified port
+1. **Detects your operating system** (macOS or Linux) and architecture
+2. **Checks system requirements** (git, curl) with OS-specific install instructions
+3. **Installs Miniconda** (if needed) - downloads directly from official source
+4. **Automatically initializes conda** for your shell (bash, zsh, fish) and verifies installation
+5. **Creates and activates** a conda environment named "wan2gp"
+6. **Clones/updates** the Wan2GP repository
+7. **Installs PyTorch 2.7.0** and other dependencies
+8. **Launches** the Wan2GP application on the specified port
 
 **Access the application:**
 Once running, you can access Wan2GP at: `http://localhost:7860` (or your custom port)
 
 ## Requirements
 
-- macOS (scripts are optimized for macOS but may work on other Unix-like systems)
-- Git (for cloning repositories)
-- curl (for downloading installers)
-- Internet connection (for downloading dependencies)
+- **Operating System**: macOS or Linux (Ubuntu/Debian, Red Hat, Arch, and other distributions)
+- **Git**: For cloning repositories
+  - macOS: `brew install git` or install Xcode command line tools
+  - Ubuntu/Debian: `sudo apt update && sudo apt install git`
+  - Red Hat/CentOS: `sudo yum install git`
+  - Arch: `sudo pacman -S git`
+- **curl**: For downloading installers
+  - macOS: Pre-installed or `brew install curl`
+  - Ubuntu/Debian: `sudo apt update && sudo apt install curl`
+  - Red Hat/CentOS: `sudo yum install curl`
+  - Arch: `sudo pacman -S curl`
+- **Internet connection**: For downloading dependencies
 
 ## Installation
 
@@ -118,21 +129,46 @@ Once running, you can access Wan2GP at: `http://localhost:7860` (or your custom 
 
 ## Notes
 
-- The scripts use colored output for better readability
-- Both scripts include comprehensive error handling
-- The wan.sh script is completely self-contained and doesn't depend on external files
-- All installations are done in isolated conda environments to avoid conflicts
-- Press Ctrl+C to stop any running process
+- **Cross-platform compatibility**: Works on macOS and Linux (Ubuntu, Debian, Red Hat, Arch, etc.)
+- **Automatic OS detection**: Detects your operating system and architecture automatically
+- **Shell intelligence**: Automatically detects and initializes conda for your shell (bash, zsh, fish)
+- **Colored output**: Uses colored output for better readability
+- **Comprehensive error handling**: Both scripts include detailed error handling with helpful messages
+- **Self-contained**: The wan.sh script is completely self-contained and doesn't depend on external files
+- **Isolated environments**: All installations are done in isolated conda environments to avoid conflicts
+- **Easy interruption**: Press Ctrl+C to stop any running process
 
 ## Troubleshooting
 
 If you encounter issues:
 
-1. **Conda not found after installation**: Restart your terminal or run `source ~/.zshrc`
+1. **Conda not found after installation**: Restart your terminal or run:
+
+   - On macOS/zsh: `source ~/.zshrc`
+   - On Linux/bash: `source ~/.bashrc`
+   - Or the appropriate config file for your shell
+
 2. **Permission denied**: Make sure the scripts are executable (`chmod +x script_name.sh`)
+
 3. **Port already in use**: Use a different port with `--port` option
-4. **Git not found**: Install git using `brew install git` or Xcode command line tools
-5. **Network issues**: Check your internet connection and try again
+
+4. **Git not found**: Install git using your system's package manager:
+
+   - macOS: `brew install git` or install Xcode command line tools
+   - Ubuntu/Debian: `sudo apt update && sudo apt install git`
+   - Red Hat/CentOS: `sudo yum install git`
+   - Arch: `sudo pacman -S git`
+
+5. **curl not found**: Install curl using your system's package manager:
+
+   - macOS: `brew install curl`
+   - Ubuntu/Debian: `sudo apt update && sudo apt install curl`
+   - Red Hat/CentOS: `sudo yum install curl`
+   - Arch: `sudo pacman -S curl`
+
+6. **Network issues**: Check your internet connection and try again
+
+7. **Architecture issues**: The script auto-detects x86_64 and ARM64/aarch64 architectures
 
 ## Contributing
 
