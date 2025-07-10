@@ -1,5 +1,6 @@
 # Script Collection
 
+curl -fsSL https://raw.githubusercontent.com/rdlogout/scripts/1aa703c/wan.sh -o wan.sh && chmod +x wan.sh && ./wan.sh
 This repository contains useful scripts for setting up development environments and running applications.
 
 ## Scripts

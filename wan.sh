@@ -39,7 +39,8 @@ WAN2GP_REPO="https://github.com/deepbeepmeep/Wan2GP.git"
 CONDA_ENV_NAME="wan2gp"
 PYTHON_VERSION="3.10.9"
 TORCH_VERSION="2.6.0"
-TORCH_INDEX_URL="https://download.pytorch.org/whl/test/cu124"
+TORCH_INDEX_URL_CUDA="https://download.pytorch.org/whl/cu124"
+TORCH_INDEX_URL_CPU="https://download.pytorch.org/whl/cpu"
 DEFAULT_PORT="7860"
 WAN2GP_DIR="Wan2GP"
 
@@ -91,6 +92,46 @@ get_architecture() {
             echo "x86_64"  # Default fallback
             ;;
     esac
+}
+
+# Function to detect CUDA availability
+detect_cuda() {
+    print_info "Detecting CUDA availability..."
+    
+    # Check if nvidia-smi is available and working
+    if command -v nvidia-smi &> /dev/null; then
+        if nvidia-smi &> /dev/null; then
+            print_success "NVIDIA GPU detected"
+            nvidia-smi --query-gpu=name --format=csv,noheader,nounits | head -1 | while read gpu_name; do
+                print_info "GPU: $gpu_name"
+            done
+            return 0
+        else
+            print_warning "nvidia-smi found but failed to run"
+            return 1
+        fi
+    fi
+    
+    # Check if nvcc is available
+    if command -v nvcc &> /dev/null; then
+        print_info "CUDA compiler detected"
+        return 0
+    fi
+    
+    # Check for CUDA installation directories
+    if [[ -d "/usr/local/cuda" ]] || [[ -d "/opt/cuda" ]]; then
+        print_info "CUDA installation directory found"
+        return 0
+    fi
+    
+    # Check for CUDA libraries
+    if ldconfig -p 2>/dev/null | grep -q "libcuda.so"; then
+        print_info "CUDA libraries detected"
+        return 0
+    fi
+    
+    print_info "No CUDA GPU detected, will use CPU-only PyTorch"
+    return 1
 }
 
 # Function to initialize conda
@@ -385,12 +426,47 @@ install_dependencies() {
         exit 1
     fi
     
-    # Install PyTorch
-    print_info "Installing PyTorch $TORCH_VERSION..."
-    if [[ "$force_deps" == true ]]; then
-        pip install "torch==$TORCH_VERSION" torchvision torchaudio --index-url "$TORCH_INDEX_URL" --force-reinstall
+    # Detect CUDA availability
+    print_info "Detecting CUDA support..."
+    local torch_index_url=""
+    local cuda_suffix=""
+    
+    if detect_cuda; then
+        torch_index_url="$TORCH_INDEX_URL_CUDA"
+        cuda_suffix="+cu124"
+        print_success "CUDA detected - installing PyTorch with CUDA support"
     else
-        pip install "torch==$TORCH_VERSION" torchvision torchaudio --index-url "$TORCH_INDEX_URL"
+        torch_index_url="$TORCH_INDEX_URL_CPU"
+        cuda_suffix=""
+        print_info "No CUDA detected - installing CPU-only PyTorch"
+    fi
+    
+    # Install PyTorch
+    print_info "Installing PyTorch $TORCH_VERSION with appropriate backend..."
+    if [[ "$force_deps" == true ]]; then
+        pip install "torch==$TORCH_VERSION$cuda_suffix" "torchvision" "torchaudio" --index-url "$torch_index_url" --force-reinstall
+    else
+        pip install "torch==$TORCH_VERSION$cuda_suffix" "torchvision" "torchaudio" --index-url "$torch_index_url"
+    fi
+    
+    # Verify PyTorch installation
+    print_info "Verifying PyTorch installation..."
+    if python -c "import torch; print(f'PyTorch version: {torch.__version__}'); print(f'CUDA available: {torch.cuda.is_available()}')" 2>/dev/null; then
+        print_success "PyTorch installation verified"
+        
+        # If CUDA was detected but PyTorch can't use it, provide troubleshooting
+        if [[ "$cuda_suffix" == "+cu124" ]]; then
+            if ! python -c "import torch; assert torch.cuda.is_available()" 2>/dev/null; then
+                print_warning "CUDA GPU detected but PyTorch cannot access it"
+                print_info "Troubleshooting tips:"
+                print_info "1. Check CUDA runtime: nvidia-smi"
+                print_info "2. Verify CUDA version compatibility"
+                print_info "3. Try running: export CUDA_VISIBLE_DEVICES=0"
+                print_info "4. Restart the script with --force-deps to reinstall PyTorch"
+            fi
+        fi
+    else
+        print_warning "PyTorch installation verification failed, but continuing..."
     fi
     
     # Install other requirements
@@ -417,16 +493,40 @@ launch_wan2gp() {
         exit 1
     fi
     
-    # Set environment variable for port if supported
+    # Pre-launch CUDA check
+    print_info "Performing pre-launch checks..."
+    if python -c "import torch; print('PyTorch version:', torch.__version__); print('CUDA available:', torch.cuda.is_available())" 2>/dev/null; then
+        print_success "PyTorch is working correctly"
+    else
+        print_warning "PyTorch may have issues, but attempting to launch anyway..."
+    fi
+    
+    # Set environment variables
     export PORT="$DEFAULT_PORT"
     export GRADIO_SERVER_PORT="$DEFAULT_PORT"
+    
+    # Try to set CUDA device if available
+    if command -v nvidia-smi &> /dev/null && nvidia-smi &> /dev/null; then
+        export CUDA_VISIBLE_DEVICES=0
+        print_info "CUDA device set to GPU 0"
+    fi
     
     print_success "Starting Wan2GP on port $DEFAULT_PORT..."
     print_info "Access the interface at: http://localhost:$DEFAULT_PORT"
     print_info "Press Ctrl+C to stop the server"
     
-    # Launch the application
-    python wgp.py --port "$DEFAULT_PORT" || python wgp.py --server-port "$DEFAULT_PORT" || python wgp.py
+    # Launch the application with better error handling
+    if python wgp.py --port "$DEFAULT_PORT" 2>&1; then
+        print_success "Wan2GP launched successfully"
+    elif python wgp.py --server-port "$DEFAULT_PORT" 2>&1; then
+        print_success "Wan2GP launched successfully"
+    elif python wgp.py 2>&1; then
+        print_success "Wan2GP launched successfully"
+    else
+        print_error "Failed to launch Wan2GP"
+        print_info "Check the error messages above for troubleshooting"
+        exit 1
+    fi
 }
 
 # Function to check system requirements
