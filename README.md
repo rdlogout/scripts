@@ -77,6 +77,18 @@ Skip conda installation (if already installed):
 ./wan.sh --skip-conda
 ```
 
+Force reinstall all dependencies:
+
+```bash
+./wan.sh --force-deps
+```
+
+Update and force reinstall dependencies:
+
+```bash
+./wan.sh --update-only --force-deps
+```
+
 **Command Line Options:**
 
 - `-h, --help`: Show help message
@@ -84,6 +96,7 @@ Skip conda installation (if already installed):
 - `--i2v`: Launch in image-to-video mode
 - `--skip-conda`: Skip conda installation (assume already installed)
 - `--update-only`: Only update existing installation
+- `--force-deps`: Force reinstall all dependencies
 
 **Environment Variables:**
 
@@ -137,6 +150,9 @@ Once running, you can access Wan2GP at: `http://localhost:7860` (or your custom 
 - **Self-contained**: The wan.sh script is completely self-contained and doesn't depend on external files
 - **Isolated environments**: All installations are done in isolated conda environments to avoid conflicts
 - **Easy interruption**: Press Ctrl+C to stop any running process
+- **Non-interactive installation**: Fully automated installation without user prompts
+- **Re-run friendly**: Handles existing installations gracefully and can update them
+- **Smart updates**: Uses git reset --hard for clean repository updates
 
 ## Troubleshooting
 
