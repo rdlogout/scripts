@@ -13,6 +13,11 @@ command_exists() {
     command -v "$1" >/dev/null 2>&1
 }
 
+# Check if sudo is available
+has_sudo() {
+    command_exists sudo && sudo -n true 2>/dev/null
+}
+
 # Install Conda (Miniconda)
 echo -e "\n${YELLOW}Checking Conda...${NC}"
 if command_exists conda; then
@@ -47,15 +52,20 @@ else
     echo -e "${RED}✗ Cloudflared not found. Installing...${NC}"
     wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O cloudflared.deb
     if command_exists dpkg; then
-        if command_exists sudo; then
+        if has_sudo; then
             sudo dpkg -i cloudflared.deb
         else
             dpkg -i cloudflared.deb
         fi
     else
         # Alternative installation for systems without dpkg
-        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
-        chmod +x /usr/local/bin/cloudflared
+        if has_sudo; then
+            sudo wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
+            sudo chmod +x /usr/local/bin/cloudflared
+        else
+            wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
+            chmod +x /usr/local/bin/cloudflared
+        fi
     fi
     rm -f cloudflared.deb
     echo -e "${GREEN}✓ Cloudflared installed successfully${NC}"
@@ -69,13 +79,13 @@ if command_exists ffmpeg; then
 else
     echo -e "${RED}✗ FFmpeg not found. Installing...${NC}"
     if command_exists apt; then
-        if command_exists sudo; then
+        if has_sudo; then
             sudo apt update && sudo apt install -y ffmpeg
         else
             apt update && apt install -y ffmpeg
         fi
     elif command_exists yum; then
-        if command_exists sudo; then
+        if has_sudo; then
             sudo yum install -y ffmpeg
         else
             yum install -y ffmpeg
