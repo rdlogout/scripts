@@ -23,10 +23,19 @@ else
     wget https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh -O ~/miniconda.sh
     bash ~/miniconda.sh -b -p $HOME/miniconda
     rm ~/miniconda.sh
+    
+    # Add conda to PATH and reload environment
     echo 'export PATH="$HOME/miniconda/bin:$PATH"' >> ~/.bashrc
     export PATH="$HOME/miniconda/bin:$PATH"
+    
+    # Initialize conda
     $HOME/miniconda/bin/conda init bash
+    
+    # Source bashrc to reload environment
+    source ~/.bashrc 2>/dev/null || true
+    
     echo -e "${GREEN}✓ Miniconda installed successfully${NC}"
+    echo -e "${YELLOW}Conda is now available in your PATH${NC}"
 fi
 
 # Install Cloudflared
@@ -37,8 +46,18 @@ if command_exists cloudflared; then
 else
     echo -e "${RED}✗ Cloudflared not found. Installing...${NC}"
     wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O cloudflared.deb
-    sudo dpkg -i cloudflared.deb
-    rm cloudflared.deb
+    if command_exists dpkg; then
+        if command_exists sudo; then
+            sudo dpkg -i cloudflared.deb
+        else
+            dpkg -i cloudflared.deb
+        fi
+    else
+        # Alternative installation for systems without dpkg
+        wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
+        chmod +x /usr/local/bin/cloudflared
+    fi
+    rm -f cloudflared.deb
     echo -e "${GREEN}✓ Cloudflared installed successfully${NC}"
 fi
 
@@ -49,10 +68,32 @@ if command_exists ffmpeg; then
     ffmpeg -version | head -1
 else
     echo -e "${RED}✗ FFmpeg not found. Installing...${NC}"
-    sudo apt update
-    sudo apt install -y ffmpeg
+    if command_exists apt; then
+        if command_exists sudo; then
+            sudo apt update && sudo apt install -y ffmpeg
+        else
+            apt update && apt install -y ffmpeg
+        fi
+    elif command_exists yum; then
+        if command_exists sudo; then
+            sudo yum install -y ffmpeg
+        else
+            yum install -y ffmpeg
+        fi
+    else
+        echo -e "${RED}✗ Package manager not found. Please install FFmpeg manually.${NC}"
+    fi
     echo -e "${GREEN}✓ FFmpeg installed successfully${NC}"
 fi
 
 echo -e "\n${GREEN}=== Installation Complete! ===${NC}"
-echo -e "${YELLOW}Note: If Conda was just installed, you may need to restart your terminal or run 'source ~/.bashrc' to use conda commands.${NC}"
+echo -e "${YELLOW}Note: Conda has been added to your PATH. You can now use conda commands.${NC}"
+echo -e "${YELLOW}If conda command is not working, run: export PATH=\"\$HOME/miniconda/bin:\$PATH\"${NC}"
+
+# Test conda availability
+if command_exists conda; then
+    echo -e "${GREEN}✓ Conda is ready to use!${NC}"
+    conda --version
+else
+    echo -e "${YELLOW}⚠ Conda may need manual PATH setup. Run: export PATH=\"\$HOME/miniconda/bin:\$PATH\"${NC}"
+fi
