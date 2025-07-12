@@ -15,7 +15,18 @@ command_exists() {
 
 # Check if sudo is available
 has_sudo() {
-    command_exists sudo && sudo -n true 2>/dev/null
+    command_exists sudo
+}
+
+# Function to run command with sudo if available
+run_with_sudo() {
+    if has_sudo; then
+        echo -e "${YELLOW}This operation requires sudo privileges...${NC}"
+        sudo "$@"
+    else
+        echo -e "${RED}Warning: sudo not available, running without privileges...${NC}"
+        "$@"
+    fi
 }
 
 # Install Conda (Miniconda)
@@ -52,20 +63,11 @@ else
     echo -e "${RED}✗ Cloudflared not found. Installing...${NC}"
     wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb -O cloudflared.deb
     if command_exists dpkg; then
-        if has_sudo; then
-            sudo dpkg -i cloudflared.deb
-        else
-            dpkg -i cloudflared.deb
-        fi
+        run_with_sudo dpkg -i cloudflared.deb
     else
         # Alternative installation for systems without dpkg
-        if has_sudo; then
-            sudo wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
-            sudo chmod +x /usr/local/bin/cloudflared
-        else
-            wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
-            chmod +x /usr/local/bin/cloudflared
-        fi
+        run_with_sudo wget -q https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64 -O /usr/local/bin/cloudflared
+        run_with_sudo chmod +x /usr/local/bin/cloudflared
     fi
     rm -f cloudflared.deb
     echo -e "${GREEN}✓ Cloudflared installed successfully${NC}"
@@ -79,17 +81,10 @@ if command_exists ffmpeg; then
 else
     echo -e "${RED}✗ FFmpeg not found. Installing...${NC}"
     if command_exists apt; then
-        if has_sudo; then
-            sudo apt update && sudo apt install -y ffmpeg
-        else
-            apt update && apt install -y ffmpeg
-        fi
+        run_with_sudo apt update
+        run_with_sudo apt install -y ffmpeg
     elif command_exists yum; then
-        if has_sudo; then
-            sudo yum install -y ffmpeg
-        else
-            yum install -y ffmpeg
-        fi
+        run_with_sudo yum install -y ffmpeg
     else
         echo -e "${RED}✗ Package manager not found. Please install FFmpeg manually.${NC}"
     fi
